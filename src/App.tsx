@@ -49,7 +49,7 @@ export default function App() {
   if (loading) return (
     <div className="splash">
       <div className="spinner" />
-      <p>Loading...</p>
+      <p>Loading EtharaAI</p>
     </div>
   );
 
@@ -64,35 +64,42 @@ export default function App() {
 
 // ─── AUTH PAGE ───────────────────────────────────────────────
 function AuthPage() {
-  const [mode, setMode] = useState<'login' | 'register'>('login');
   const { login } = useContext(AuthContext);
   const { theme, toggleTheme } = useContext(ThemeContext);
 
-  // Step tracking for register: 'admin-verify' → 'fill-form'
-  const [registerStep, setRegisterStep] = useState<'admin-verify' | 'fill-form'>('admin-verify');
+  // 'login' | 'register-form'
+  const [mode, setMode] = useState<'login' | 'register-form'>('login');
 
   const [adminCreds, setAdminCreds] = useState({ admin_id: '', admin_password: '' });
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'member' });
+  const [loginForm, setLoginForm] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Reset state when switching tabs
-  const switchMode = (m: 'login' | 'register') => {
-    setMode(m);
+  const resetToLogin = () => {
+    setMode('login');
     setError('');
-    setRegisterStep('admin-verify');
     setAdminCreds({ admin_id: '', admin_password: '' });
     setForm({ name: '', email: '', password: '', role: 'member' });
+    setLoginForm({ email: '', password: '' });
   };
 
-  // Step 1: verify admin
-  const handleAdminVerify = async (e: React.FormEvent) => {
+  // Login — if admin/admin123, go to register flow instead of logging in
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    // Special: master admin credentials trigger register flow
+    if (loginForm.email === 'admin' && loginForm.password === 'admin123') {
+      setAdminCreds({ admin_id: 'admin', admin_password: 'admin123' });
+      setMode('register-form');
+      return;
+    }
+
     setLoading(true);
     try {
-      await api.verifyAdmin(adminCreds.admin_id, adminCreds.admin_password);
-      setRegisterStep('fill-form');
+      const res = await api.login({ email: loginForm.email, password: loginForm.password });
+      login(res.token, res.user);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -100,7 +107,7 @@ function AuthPage() {
     }
   };
 
-  // Step 2: actual registration
+  // Register: actual registration
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -119,115 +126,89 @@ function AuthPage() {
     }
   };
 
-  // Login handler
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-    try {
-      const res = await api.login({ email: form.email, password: form.password });
-      login(res.token, res.user);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <div className="auth-page">
-      <button className="theme-toggle-float" onClick={toggleTheme}>
+      {/* Theme toggle */}
+      <button className="theme-toggle-float" onClick={toggleTheme} title="Toggle theme">
         {theme === 'dark' ? '☀️' : '🌙'}
       </button>
 
       <div className="auth-card">
+        {/* Logo */}
         <div className="auth-logo">
           <span className="logo-icon">⚡</span>
-          <h1>TaskFlow</h1>
+          <h1>Ethara<em>AI</em></h1>
           <p>Team Task Manager</p>
-        </div>
-
-        <div className="auth-tabs">
-          <button className={mode === 'login' ? 'active' : ''} onClick={() => switchMode('login')}>
-            Login
-          </button>
-          <button className={mode === 'register' ? 'active' : ''} onClick={() => switchMode('register')}>
-            Register
-          </button>
         </div>
 
         {/* ── LOGIN ── */}
         {mode === 'login' && (
           <form onSubmit={handleLogin} className="auth-form">
             <div className="field">
-              <label>Email</label>
-              <input type="email" placeholder="you@example.com" value={form.email}
-                onChange={e => setForm({ ...form, email: e.target.value })} required />
+              <label>Email / Username</label>
+              <input
+                placeholder="you@company.com"
+                value={loginForm.email}
+                onChange={e => setLoginForm({ ...loginForm, email: e.target.value })}
+                required
+                autoComplete="username"
+              />
             </div>
             <div className="field">
               <label>Password</label>
-              <input type="password" placeholder="••••••••" value={form.password}
-                onChange={e => setForm({ ...form, password: e.target.value })} required />
-            </div>
-            {error && <div className="error-msg">⚠️ {error}</div>}
-            <button type="submit" className="btn-primary" disabled={loading}>
-              {loading ? 'Signing in...' : 'Sign In'}
-            </button>
-          </form>
-        )}
-
-        {/* ── REGISTER STEP 1: Admin Verification ── */}
-        {mode === 'register' && registerStep === 'admin-verify' && (
-          <form onSubmit={handleAdminVerify} className="auth-form">
-            <div className="admin-verify-banner">
-              🔐 Admin approval required to create accounts
-            </div>
-            <div className="field">
-              <label>Admin ID</label>
-              <input
-                placeholder="Enter admin ID"
-                value={adminCreds.admin_id}
-                onChange={e => setAdminCreds({ ...adminCreds, admin_id: e.target.value })}
-                required
-              />
-            </div>
-            <div className="field">
-              <label>Admin Password</label>
               <input
                 type="password"
-                placeholder="Enter admin password"
-                value={adminCreds.admin_password}
-                onChange={e => setAdminCreds({ ...adminCreds, admin_password: e.target.value })}
+                placeholder="••••••••"
+                value={loginForm.password}
+                onChange={e => setLoginForm({ ...loginForm, password: e.target.value })}
                 required
+                autoComplete="current-password"
               />
             </div>
             {error && <div className="error-msg">⚠️ {error}</div>}
             <button type="submit" className="btn-primary" disabled={loading}>
-              {loading ? 'Verifying...' : 'Verify & Continue →'}
+              {loading ? 'Signing in…' : 'Sign In →'}
             </button>
+            <p style={{ fontSize: '11.5px', color: 'var(--text3)', textAlign: 'center', marginTop: '2px' }}>
+              New accounts can only be created by an admin.
+            </p>
           </form>
         )}
 
-        {/* ── REGISTER STEP 2: Fill User Details ── */}
-        {mode === 'register' && registerStep === 'fill-form' && (
+        {/* ── REGISTER FORM (reached via admin login) ── */}
+        {mode === 'register-form' && (
           <form onSubmit={handleRegister} className="auth-form">
             <div className="admin-verified-banner">
-              ✅ Admin verified — fill in new user details
+              ✅ Admin verified — Create new user
             </div>
             <div className="field">
               <label>Full Name</label>
-              <input placeholder="John Doe" value={form.name}
-                onChange={e => setForm({ ...form, name: e.target.value })} required />
+              <input
+                placeholder="Jane Smith"
+                value={form.name}
+                onChange={e => setForm({ ...form, name: e.target.value })}
+                required
+              />
             </div>
             <div className="field">
               <label>Email</label>
-              <input type="email" placeholder="user@example.com" value={form.email}
-                onChange={e => setForm({ ...form, email: e.target.value })} required />
+              <input
+                type="email"
+                placeholder="user@company.com"
+                value={form.email}
+                onChange={e => setForm({ ...form, email: e.target.value })}
+                required
+              />
             </div>
             <div className="field">
               <label>Password</label>
-              <input type="password" placeholder="Min 6 characters" value={form.password}
-                onChange={e => setForm({ ...form, password: e.target.value })} required />
+              <input
+                type="password"
+                placeholder="Min 6 characters"
+                value={form.password}
+                onChange={e => setForm({ ...form, password: e.target.value })}
+                required
+              />
             </div>
             <div className="field">
               <label>Role</label>
@@ -238,14 +219,10 @@ function AuthPage() {
             </div>
             {error && <div className="error-msg">⚠️ {error}</div>}
             <button type="submit" className="btn-primary" disabled={loading}>
-              {loading ? 'Creating account...' : 'Create Account'}
+              {loading ? 'Creating account…' : 'Create Account →'}
             </button>
-            <button
-              type="button"
-              className="btn-back"
-              onClick={() => { setRegisterStep('admin-verify'); setError(''); }}
-            >
-              ← Back
+            <button type="button" className="btn-back" onClick={resetToLogin}>
+              ← Back to Sign In
             </button>
           </form>
         )}
@@ -253,6 +230,7 @@ function AuthPage() {
     </div>
   );
 }
+
 // ─── DASHBOARD ───────────────────────────────────────────────
 function Dashboard() {
   const { user, logout } = useContext(AuthContext);
@@ -268,25 +246,38 @@ function Dashboard() {
 
   return (
     <div className={`app-layout ${sidebarOpen ? 'sidebar-open' : 'sidebar-closed'}`}>
-      {/* Sidebar */}
+      {/* ── Sidebar ── */}
       <aside className="sidebar">
         <div className="sidebar-header">
           <span className="logo-icon">⚡</span>
-          {sidebarOpen && <span className="logo-text">TaskFlow</span>}
-          <button className="sidebar-toggle" onClick={() => setSidebarOpen(!sidebarOpen)}>
+          {sidebarOpen && (
+            <span className="logo-text">
+              Ethara<em>AI</em>
+            </span>
+          )}
+          <button className="sidebar-toggle" onClick={() => setSidebarOpen(!sidebarOpen)} title="Toggle sidebar">
             {sidebarOpen ? '◀' : '▶'}
           </button>
         </div>
 
         <nav className="sidebar-nav">
-          <button className={page === 'home' ? 'active' : ''} onClick={() => setPage('home')}>
+          <button
+            className={page === 'home' ? 'active' : ''}
+            onClick={() => setPage('home')}
+          >
             <span>🏠</span>{sidebarOpen && <span>Dashboard</span>}
           </button>
-          <button className={page === 'projects' ? 'active' : ''} onClick={() => setPage('projects')}>
+          <button
+            className={page === 'projects' ? 'active' : ''}
+            onClick={() => setPage('projects')}
+          >
             <span>📁</span>{sidebarOpen && <span>Projects</span>}
           </button>
           {selectedProject && (
-            <button className={page === 'tasks' ? 'active' : ''} onClick={() => setPage('tasks')}>
+            <button
+              className={page === 'tasks' ? 'active' : ''}
+              onClick={() => setPage('tasks')}
+            >
               <span>✅</span>{sidebarOpen && <span>Tasks</span>}
             </button>
           )}
@@ -298,19 +289,27 @@ function Dashboard() {
             {sidebarOpen && <span>{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>}
           </button>
           <button onClick={logout} className="logout-btn">
-            <span>🚪</span>{sidebarOpen && <span>Logout</span>}
+            <span>🚪</span>{sidebarOpen && <span>Sign Out</span>}
           </button>
         </div>
       </aside>
 
-      {/* Main */}
+      {/* ── Main ── */}
       <main className="main-content">
         <header className="topbar">
           <div>
-            <h2>{page === 'home' ? 'Dashboard' : page === 'projects' ? 'Projects' : selectedProject?.name}</h2>
+            <h2>
+              {page === 'home'
+                ? 'Dashboard'
+                : page === 'projects'
+                ? 'Projects'
+                : selectedProject?.name}
+            </h2>
             {selectedProject && page === 'tasks' && (
               <p className="breadcrumb">
-                <button onClick={() => setPage('projects')}>Projects</button> / {selectedProject.name}
+                <button onClick={() => setPage('projects')}>Projects</button>
+                <span>›</span>
+                {selectedProject.name}
               </p>
             )}
           </div>
@@ -341,13 +340,13 @@ function HomePage() {
     api.dashboard().then(setStats).catch(console.error);
   }, []);
 
-  if (!stats) return <div className="loading">Loading dashboard...</div>;
+  if (!stats) return <div className="loading">Loading dashboard…</div>;
 
   const cards = [
-    { label: 'Projects', value: stats.total_projects, icon: '📁', color: 'blue' },
-    { label: 'Total Tasks', value: stats.total_tasks, icon: '📋', color: 'purple' },
-    { label: 'My Tasks', value: stats.my_tasks, icon: '👤', color: 'green' },
-    { label: 'Overdue', value: stats.overdue_tasks, icon: '⚠️', color: 'red' },
+    { label: 'Projects',    value: stats.total_projects, icon: '📁', color: 'blue' },
+    { label: 'Total Tasks', value: stats.total_tasks,    icon: '📋', color: 'purple' },
+    { label: 'My Tasks',    value: stats.my_tasks,       icon: '👤', color: 'green' },
+    { label: 'Overdue',     value: stats.overdue_tasks,  icon: '⚠️', color: 'red' },
   ];
 
   return (
@@ -368,9 +367,9 @@ function HomePage() {
         <h3>Task Overview</h3>
         <div className="progress-bars">
           {[
-            { label: 'To Do', count: stats.todo, color: '#6366f1' },
+            { label: 'To Do',       count: stats.todo,        color: '#6366f1' },
             { label: 'In Progress', count: stats.in_progress, color: '#f59e0b' },
-            { label: 'Done', count: stats.done, color: '#10b981' },
+            { label: 'Done',        count: stats.done,        color: '#10b981' },
           ].map(s => (
             <div key={s.label} className="progress-item">
               <div className="progress-meta">
@@ -444,7 +443,7 @@ function ProjectsPage({ onOpenProject }: { onOpenProject: (p: any) => void }) {
       <div className="page-header">
         <h3>{projects.length} Project{projects.length !== 1 ? 's' : ''}</h3>
         {user?.role === 'admin' && (
-          <button className="btn-primary" onClick={() => setShowForm(!showForm)}>
+          <button className="btn-primary" style={{ width: 'auto' }} onClick={() => setShowForm(!showForm)}>
             {showForm ? 'Cancel' : '+ New Project'}
           </button>
         )}
@@ -452,12 +451,19 @@ function ProjectsPage({ onOpenProject }: { onOpenProject: (p: any) => void }) {
 
       {showForm && (
         <form className="inline-form" onSubmit={create}>
-          <input placeholder="Project name" value={form.name}
-            onChange={e => setForm({ ...form, name: e.target.value })} required />
-          <input placeholder="Description (optional)" value={form.description}
-            onChange={e => setForm({ ...form, description: e.target.value })} />
+          <input
+            placeholder="Project name"
+            value={form.name}
+            onChange={e => setForm({ ...form, name: e.target.value })}
+            required
+          />
+          <input
+            placeholder="Description (optional)"
+            value={form.description}
+            onChange={e => setForm({ ...form, description: e.target.value })}
+          />
           {error && <div className="error-msg">⚠️ {error}</div>}
-          <button type="submit" className="btn-primary">Create</button>
+          <button type="submit" className="btn-primary" style={{ width: 'auto' }}>Create Project</button>
         </form>
       )}
 
@@ -473,7 +479,12 @@ function ProjectsPage({ onOpenProject }: { onOpenProject: (p: any) => void }) {
             <div className="project-card-header">
               <h4>{p.name}</h4>
               {user?.role === 'admin' && (
-                <button className="icon-btn danger" onClick={e => { e.stopPropagation(); remove(p.id); }}>🗑</button>
+                <button
+                  className="icon-btn danger"
+                  onClick={e => { e.stopPropagation(); remove(p.id); }}
+                >
+                  🗑
+                </button>
               )}
             </div>
             <p className="project-desc">{p.description || 'No description'}</p>
@@ -492,10 +503,9 @@ function ProjectsPage({ onOpenProject }: { onOpenProject: (p: any) => void }) {
   );
 }
 
-// ─── TASK TIMER COMPONENT ────────────────────────────────
-// ─── TASK TIMER COMPONENT ────────────────────────────────
-function TaskTimer({ taskId, taskStatus}: { 
-  taskId: string; 
+// ─── TASK TIMER COMPONENT ────────────────────────────────────
+function TaskTimer({ taskId, taskStatus }: {
+  taskId: string;
   taskStatus: string;
 }) {
   const [elapsed, setElapsed] = useState<number>(0);
@@ -507,13 +517,21 @@ function TaskTimer({ taskId, taskStatus}: {
   const intervalRef = useRef<any>(null);
   const screenshotIntervalRef = useRef<any>(null);
   const saveIntervalRef = useRef<any>(null);
+  const runningRef = useRef(running);
 
-  // ── Auto-pause when task is moved to "done" ──
+  useEffect(() => { runningRef.current = running; }, [running]);
+
+  // ── Auto-pause when task moves to "todo" or "done" ──
   useEffect(() => {
-    if (taskStatus === 'done' && running) {
-      handlePause();
+    if (!loaded) return;
+    if ((taskStatus === 'todo' || taskStatus === 'done') && runningRef.current) {
+      setRunning(false);
+      setElapsed(prev => {
+        api.saveTimer(taskId, { elapsed: prev, running: false, startedAt: null });
+        return prev;
+      });
     }
-  }, [taskStatus]);
+  }, [taskStatus, loaded]);
 
   // ── Load timer state from server on mount ──
   useEffect(() => {
@@ -544,7 +562,7 @@ function TaskTimer({ taskId, taskStatus}: {
     return () => clearInterval(intervalRef.current);
   }, [running, loaded]);
 
-  // ── Auto-save to server every 10 seconds while running ──
+  // ── Auto-save every 10 seconds ──
   useEffect(() => {
     if (!loaded) return;
     clearInterval(saveIntervalRef.current);
@@ -559,7 +577,7 @@ function TaskTimer({ taskId, taskStatus}: {
     return () => clearInterval(saveIntervalRef.current);
   }, [running, startedAt, loaded]);
 
-  // ── Screenshot every 5 min using the kept-alive stream ──
+  // ── Screenshot every 5 min ──
   useEffect(() => {
     if (!loaded) return;
     clearInterval(screenshotIntervalRef.current);
@@ -571,11 +589,9 @@ function TaskTimer({ taskId, taskStatus}: {
     return () => clearInterval(screenshotIntervalRef.current);
   }, [running, screenStream, loaded]);
 
-  // ── Stop stream when component unmounts ──
+  // ── Stop stream on unmount ──
   useEffect(() => {
-    return () => {
-      screenStream?.getTracks().forEach(t => t.stop());
-    };
+    return () => { screenStream?.getTracks().forEach(t => t.stop()); };
   }, [screenStream]);
 
   const captureFromStream = async (stream: MediaStream, tid: string) => {
@@ -597,12 +613,10 @@ function TaskTimer({ taskId, taskStatus}: {
 
   const requestScreenPermission = async (): Promise<MediaStream | null> => {
     try {
-      // This MUST be called from a direct user click — which handleStart is
       const stream = await (navigator.mediaDevices as any).getDisplayMedia({
         video: { mediaSource: 'screen' },
         audio: false,
       });
-      // If user later stops sharing via browser UI, clean up
       stream.getVideoTracks()[0].addEventListener('ended', () => {
         setScreenStream(null);
         setScreenPermission('denied');
@@ -621,11 +635,8 @@ function TaskTimer({ taskId, taskStatus}: {
     setStartedAt(now);
     setRunning(true);
     api.saveTimer(taskId, { elapsed, running: true, startedAt: now });
-
-    // Request screen share on first start (direct user gesture = browser allows prompt)
     if (screenPermission === 'none') {
       const stream = await requestScreenPermission();
-      // Take a first screenshot immediately on start
       if (stream) captureFromStream(stream, taskId);
     }
   };
@@ -662,8 +673,12 @@ function TaskTimer({ taskId, taskStatus}: {
       <div className="timer-display">
         <span className="timer-icon">{running ? '⏱' : elapsed > 0 ? '⏸' : '⏱'}</span>
         <span className="timer-time">{format(elapsed)}</span>
-        {screenPermission === 'granted' && <span title="Screen recording active" style={{fontSize:'10px', color:'#10b981'}}>● REC</span>}
-        {screenPermission === 'denied' && <span title="Screen share denied — screenshots disabled" style={{fontSize:'10px', color:'#f59e0b'}}>⚠ No screen</span>}
+        {screenPermission === 'granted' && (
+          <span title="Screen recording active" style={{ fontSize: '9px', color: '#10b981', fontFamily: 'var(--font-mono)', letterSpacing: '0.05em' }}>● REC</span>
+        )}
+        {screenPermission === 'denied' && (
+          <span title="Screen share denied" style={{ fontSize: '9px', color: '#f59e0b', fontFamily: 'var(--font-mono)' }}>⚠ No screen</span>
+        )}
       </div>
       <div className="timer-controls">
         {!running ? (
@@ -671,14 +686,10 @@ function TaskTimer({ taskId, taskStatus}: {
             {elapsed > 0 ? '▶ Resume' : '▶ Start'}
           </button>
         ) : (
-          <button className="timer-btn pause" onClick={handlePause}>
-            ⏸ Pause
-          </button>
+          <button className="timer-btn pause" onClick={handlePause}>⏸ Pause</button>
         )}
         {elapsed > 0 && (
-          <button className="timer-btn reset" onClick={handleReset}>
-            ↺ Reset
-          </button>
+          <button className="timer-btn reset" onClick={handleReset}>↺ Reset</button>
         )}
       </div>
     </div>
@@ -698,9 +709,10 @@ function TasksPage({ project }: { project: any }) {
   });
   const [memberEmail, setMemberEmail] = useState('');
   const [error, setError] = useState('');
-  const [filterMine, setFilterMine] = useState(false); // ✅ filter toggle
+  const [filterMine, setFilterMine] = useState(false);
   const [allUsers, setAllUsers] = useState<any[]>([]);
-  const loadTasks = () => api.getTasks(project.id).then(setTasks).catch(console.error);
+
+  const loadTasks   = () => api.getTasks(project.id).then(setTasks).catch(console.error);
   const loadMembers = () => api.getMembers(project.id).then(setMembers).catch(console.error);
 
   useEffect(() => {
@@ -754,17 +766,13 @@ function TasksPage({ project }: { project: any }) {
   };
 
   const columns = [
-    { key: 'todo', label: '📋 To Do', color: '#6366f1' },
-    { key: 'in_progress', label: '🔄 In Progress', color: '#f59e0b' },
-    { key: 'done', label: '✅ Done', color: '#10b981' },
+    { key: 'todo',        label: '📋 To Do',       color: '#6366f1' },
+    { key: 'in_progress', label: '🔄 In Progress',  color: '#f59e0b' },
+    { key: 'done',        label: '✅ Done',          color: '#10b981' },
   ];
 
-  // ✅ Filtered tasks: members can optionally filter to only their tasks
-  const visibleTasks = filterMine
-    ? tasks.filter(t => t.is_mine)
-    : tasks;
+  const visibleTasks = filterMine ? tasks.filter(t => t.is_mine) : tasks;
 
-  // ✅ Members can only move tasks assigned to them
   const canMoveTask = (task: any) => {
     if (user?.role === 'admin') return true;
     return task.is_mine;
@@ -772,6 +780,7 @@ function TasksPage({ project }: { project: any }) {
 
   return (
     <div className="tasks-page">
+      {/* Tabs */}
       <div className="tasks-tabs">
         <button className={activeTab === 'tasks' ? 'active' : ''} onClick={() => setActiveTab('tasks')}>
           ✅ Tasks
@@ -787,7 +796,6 @@ function TasksPage({ project }: { project: any }) {
           <div className="page-header">
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <h3>{visibleTasks.length} Tasks</h3>
-              {/* ✅ "My Tasks" filter — useful for both admin & member */}
               <button
                 className={`filter-btn ${filterMine ? 'active' : ''}`}
                 onClick={() => setFilterMine(!filterMine)}
@@ -796,13 +804,12 @@ function TasksPage({ project }: { project: any }) {
               </button>
             </div>
             {user?.role === 'admin' && (
-              <button className="btn-primary" onClick={() => setShowTaskForm(!showTaskForm)}>
+              <button className="btn-primary" style={{ width: 'auto' }} onClick={() => setShowTaskForm(!showTaskForm)}>
                 {showTaskForm ? 'Cancel' : '+ New Task'}
               </button>
             )}
           </div>
 
-          {/* ✅ Task creation form — only for admins */}
           {showTaskForm && user?.role === 'admin' && (
             <form className="inline-form task-form" onSubmit={createTask}>
               <input
@@ -817,7 +824,6 @@ function TasksPage({ project }: { project: any }) {
                 onChange={e => setTaskForm({ ...taskForm, description: e.target.value })}
               />
               <div className="form-row">
-                {/* ✅ Assign to: shows all project members INCLUDING current user */}
                 <select
                   value={taskForm.assignee_id}
                   onChange={e => setTaskForm({ ...taskForm, assignee_id: e.target.value })}
@@ -844,11 +850,10 @@ function TasksPage({ project }: { project: any }) {
                 />
               </div>
               {error && <div className="error-msg">⚠️ {error}</div>}
-              <button type="submit" className="btn-primary">Create Task</button>
+              <button type="submit" className="btn-primary" style={{ width: 'auto' }}>Create Task</button>
             </form>
           )}
 
-          {/* ✅ Member info banner */}
           {user?.role === 'member' && (
             <div className="info-banner">
               👋 You can update the status of tasks assigned to you. Tasks marked <strong>(Yours)</strong> are yours to move.
@@ -866,17 +871,11 @@ function TasksPage({ project }: { project: any }) {
                 </div>
                 <div className="kanban-cards">
                   {visibleTasks.filter(t => t.status === col.key).map((t: any) => (
-                    <div
-                      key={t.id}
-                      className={`task-card ${t.is_mine ? 'task-mine' : ''}`}
-                    >
+                    <div key={t.id} className={`task-card ${t.is_mine ? 'task-mine' : ''}`}>
                       <div className="task-card-header">
                         <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
                           <span className={`priority-badge priority-${t.priority}`}>{t.priority}</span>
-                          {/* ✅ Show "(Yours)" tag so member knows which tasks they own */}
-                          {t.is_mine && (
-                            <span className="mine-badge">Yours</span>
-                          )}
+                          {t.is_mine && <span className="mine-badge">Yours</span>}
                         </div>
                         {user?.role === 'admin' && (
                           <button className="icon-btn danger sm" onClick={() => deleteTask(t.id)}>🗑</button>
@@ -896,37 +895,32 @@ function TasksPage({ project }: { project: any }) {
                           </span>
                         )}
                       </div>
-                      {/* ✅ Live Timer */}
-                    <TaskTimer taskId={t.id} taskStatus={t.status} />
 
-                    {/* Status action buttons */}
-                    {canMoveTask(t) && (
-                      <div className="status-actions">
-                        {col.key !== 'todo' && (
-                          <button
-                            className="status-btn"
-                            onClick={() => updateStatus(t.id, col.key === 'in_progress' ? 'todo' : 'in_progress')}
-                          >
-                            ◀ {col.key === 'in_progress' ? 'To Do' : 'In Progress'}
-                          </button>
-                        )}
-                        {col.key !== 'done' && (
-                          <button
-                            className="status-btn advance"
-                            onClick={() => updateStatus(t.id, col.key === 'todo' ? 'in_progress' : 'done')}
-                          >
-                            {col.key === 'todo' ? 'Start ▶' : 'Done ✓'}
-                          </button>
-                        )}
-                      </div>
-                    )}
+                      {/* Timer */}
+                      <TaskTimer taskId={t.id} taskStatus={t.status} />
 
-                    {user?.role === 'member' && !t.is_mine && (
-                      <p className="locked-hint">🔒 Assigned to {t.assignee_name}</p>
-                    )}
-                      
+                      {/* Status action buttons */}
+                      {canMoveTask(t) && (
+                        <div className="status-actions">
+                          {col.key !== 'todo' && (
+                            <button
+                              className="status-btn"
+                              onClick={() => updateStatus(t.id, col.key === 'in_progress' ? 'todo' : 'in_progress')}
+                            >
+                              ◀ {col.key === 'in_progress' ? 'To Do' : 'In Progress'}
+                            </button>
+                          )}
+                          {col.key !== 'done' && (
+                            <button
+                              className="status-btn advance"
+                              onClick={() => updateStatus(t.id, col.key === 'todo' ? 'in_progress' : 'done')}
+                            >
+                              {col.key === 'todo' ? 'Start ▶' : 'Done ✓'}
+                            </button>
+                          )}
+                        </div>
+                      )}
 
-                      {/* ✅ If member but not their task — show locked hint */}
                       {user?.role === 'member' && !t.is_mine && (
                         <p className="locked-hint">🔒 Assigned to {t.assignee_name}</p>
                       )}
@@ -935,7 +929,7 @@ function TasksPage({ project }: { project: any }) {
 
                   {visibleTasks.filter(t => t.status === col.key).length === 0 && (
                     <div className="empty-col">
-                      {filterMine ? 'No tasks assigned to you' : 'No tasks'}
+                      {filterMine ? 'No tasks assigned to you' : 'No tasks yet'}
                     </div>
                   )}
                 </div>
@@ -951,7 +945,7 @@ function TasksPage({ project }: { project: any }) {
           <div className="page-header">
             <h3>{members.length} Members</h3>
             {user?.role === 'admin' && (
-              <button className="btn-primary" onClick={() => setShowMemberForm(!showMemberForm)}>
+              <button className="btn-primary" style={{ width: 'auto' }} onClick={() => setShowMemberForm(!showMemberForm)}>
                 {showMemberForm ? 'Cancel' : '+ Add Member'}
               </button>
             )}
@@ -959,7 +953,6 @@ function TasksPage({ project }: { project: any }) {
 
           {showMemberForm && (
             <form className="inline-form" onSubmit={addMember}>
-              {/* ✅ Dropdown of all registered users not already in project */}
               <div className="field">
                 <label>Select User to Add</label>
                 <select
@@ -977,11 +970,11 @@ function TasksPage({ project }: { project: any }) {
                     ))}
                 </select>
               </div>
-              <p style={{ fontSize: '12px', color: 'var(--text2)' }}>
-                ℹ️ Only registered users who are not already members are shown.
+              <p style={{ fontSize: '12px', color: 'var(--text3)' }}>
+                ℹ️ Only registered users not already members are shown.
               </p>
               {error && <div className="error-msg">⚠️ {error}</div>}
-              <button type="submit" className="btn-primary" disabled={!memberEmail}>
+              <button type="submit" className="btn-primary" style={{ width: 'auto' }} disabled={!memberEmail}>
                 Add Member
               </button>
             </form>
@@ -994,7 +987,6 @@ function TasksPage({ project }: { project: any }) {
                 <div className="member-info">
                   <p className="member-name">
                     {m.name}
-                    {/* ✅ Clearly mark who the current logged in user is */}
                     {m.is_current_user && <span className="you-badge"> (You)</span>}
                   </p>
                   <p className="member-email">{m.email}</p>
